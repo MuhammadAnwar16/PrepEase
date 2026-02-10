@@ -1,0 +1,13 @@
+# Node dependencies
+node_modules/
+
+# Python virtual environment
+venv/
+.venv/
+
+# Local uploads and binaries
+backend/uploads/*.pdf
+backend/node_modules/
+*.dylib
+*.so
+*.exe
