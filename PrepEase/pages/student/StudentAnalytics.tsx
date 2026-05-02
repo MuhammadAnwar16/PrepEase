@@ -87,7 +87,7 @@ const StudentAnalytics: React.FC = () => {
         setSummary(response.data.summary || null);
         setAssignments(response.data.assignments || []);
         setQuizzes(response.data.quizzes || []);
-        setWeakTopics(response.data.weakTopics || []);
+        setWeakTopics(response.data.summary?.weakTopics || response.data.weakTopics || []);
       } catch (err: any) {
           const serverMessage = err?.response?.data?.message;
           const status = err?.response?.status;
@@ -372,34 +372,6 @@ const StudentAnalytics: React.FC = () => {
         </div>
       )}
 
-      {/* Recommendations */}
-      {insights.recommendations.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-serif font-bold text-stone-900">💡 Recommendations to Improve</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {insights.recommendations.map((rec, idx) => {
-              const IconComponent = rec.icon;
-              return (
-                <div key={idx} className="bg-gradient-to-br from-emerald-50 to-emerald-100 p-6 rounded-sm border border-emerald-200">
-                  <div className="flex items-start gap-3 mb-4">
-                    <IconComponent size={24} className="text-emerald-700 flex-shrink-0" strokeWidth={1.5} />
-                    <h3 className="font-semibold text-stone-900 text-sm">{rec.title}</h3>
-                  </div>
-                  <ul className="space-y-2">
-                    {rec.tips.map((tip, tipIdx) => (
-                      <li key={tipIdx} className="text-xs text-emerald-900 font-sans flex items-start gap-2">
-                        <span className="text-emerald-700 font-bold mt-0.5">✓</span>
-                        <span>{tip}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Success Message */}
       {insights.issues.length === 0 && summary && (
         <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 p-6 rounded-sm border border-emerald-200">
@@ -411,6 +383,80 @@ const StudentAnalytics: React.FC = () => {
                 You're performing well in this course. Keep up the good work and maintain your progress!
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Weak Topics Section */}
+      {weakTopics && weakTopics.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-serif font-bold text-stone-900">📚 Areas You're Lagging In (by Topic)</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {weakTopics.map((topic, idx) => {
+              const isWeak = topic.percentage < 70;
+              return (
+                <div
+                  key={idx}
+                  className={`p-6 rounded-sm border ${
+                    isWeak
+                      ? 'bg-gradient-to-br from-rose-50 to-red-100 border-rose-200'
+                      : 'bg-gradient-to-br from-emerald-50 to-green-100 border-emerald-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className={`font-semibold text-sm ${isWeak ? 'text-rose-900' : 'text-emerald-900'}`}>
+                      {topic.displayLabel || `${topic.quizLabel || 'Quiz'} • ${topic.topic}`}
+                    </h3>
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-bold ${
+                        isWeak
+                          ? 'bg-rose-200 text-rose-900'
+                          : 'bg-emerald-200 text-emerald-900'
+                      }`}
+                    >
+                      {topic.percentage.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className={`w-full h-2 rounded-full overflow-hidden ${isWeak ? 'bg-rose-200' : 'bg-emerald-200'}`}>
+                      <div
+                        className={`h-full transition-all ${
+                          isWeak
+                            ? 'bg-gradient-to-r from-rose-500 to-red-600'
+                            : 'bg-gradient-to-r from-emerald-500 to-green-600'
+                        }`}
+                        style={{ width: `${topic.percentage}%` }}
+                      />
+                    </div>
+                    <p className={`text-xs ${isWeak ? 'text-rose-800' : 'text-emerald-800'}`}>
+                      {topic.correctAnswers} out of {topic.totalQuestions} questions correct
+                    </p>
+                    {topic.quizLabel && (
+                      <p className={`text-[11px] font-sans ${isWeak ? 'text-rose-700' : 'text-emerald-700'}`}>
+                        Quiz: {topic.quizLabel}
+                      </p>
+                    )}
+                    {Array.isArray(topic.wrongQuestions) && topic.wrongQuestions.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className={`text-[11px] font-semibold ${isWeak ? 'text-rose-700' : 'text-emerald-700'}`}>
+                          Wrong questions to review:
+                        </p>
+                        <ul className={`list-disc pl-4 space-y-1 text-[11px] ${isWeak ? 'text-rose-700' : 'text-emerald-700'}`}>
+                          {topic.wrongQuestions.slice(0, 4).map((wrongQuestion: string, questionIndex: number) => (
+                            <li key={questionIndex}>{wrongQuestion}</li>
+                          ))}
+                        </ul>
+                        {topic.wrongQuestions.length > 4 && (
+                          <p className={`text-[11px] ${isWeak ? 'text-rose-700' : 'text-emerald-700'}`}>
+                            + {topic.wrongQuestions.length - 4} more
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

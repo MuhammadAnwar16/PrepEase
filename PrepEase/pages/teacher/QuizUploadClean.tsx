@@ -8,6 +8,7 @@ interface Question {
   options: string[];
   correctAnswer: number;
   difficulty: 'easy' | 'medium' | 'hard';
+  topic?: string;
 }
 
 const QuizUploadClean: React.FC = () => {
@@ -37,6 +38,7 @@ const QuizUploadClean: React.FC = () => {
       options: ['', '', '', ''],
       correctAnswer: 0,
       difficulty: 'medium',
+      topic: '',
     },
   ]);
 
@@ -106,6 +108,7 @@ const QuizUploadClean: React.FC = () => {
         options: ['', '', '', ''],
         correctAnswer: 0,
         difficulty: 'medium',
+        topic: '',
       },
     ]);
   };
@@ -118,7 +121,7 @@ const QuizUploadClean: React.FC = () => {
 
   const handleQuestionChange = (index: number, field: string, value: any) => {
     const newQuestions = [...questions];
-    if (field === 'question' || field === 'correctAnswer' || field === 'difficulty') {
+    if (field === 'question' || field === 'correctAnswer' || field === 'difficulty' || field === 'topic') {
       (newQuestions[index] as any)[field] = value;
     }
     setQuestions(newQuestions);
@@ -145,6 +148,7 @@ const QuizUploadClean: React.FC = () => {
         options: ['', '', '', ''],
         correctAnswer: 0,
         difficulty: 'medium',
+          topic: '',
       },
     ]);
     setExpandedQuestions([]);
@@ -480,19 +484,31 @@ const QuizUploadClean: React.FC = () => {
                           </div>
 
                           <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Correct Answer</label>
-                            <select
-                              value={question.correctAnswer}
-                              onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', parseInt(e.target.value))}
-                              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                            >
-                              {question.options.map((_, idx) => (
-                                <option key={idx} value={idx}>
-                                  Option {idx + 1}
-                                </option>
-                              ))}
-                            </select>
+                            <label className="block font-mono text-[10px] uppercase tracking-widest font-bold text-stone-400 mb-1">Topic *</label>
+                            <input
+                              type="text"
+                              value={question.topic || ''}
+                              onChange={(e) => handleQuestionChange(qIndex, 'topic', e.target.value)}
+                              placeholder="e.g., Loops, Arrays, Functions"
+                              required
+                              className="w-full px-4 py-3 bg-white border border-stone-200 font-sans text-sm text-stone-900 focus:border-stone-900 focus:ring-0 focus:outline-none rounded-sm"
+                            />
                           </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Correct Answer</label>
+                          <select
+                            value={question.correctAnswer}
+                            onChange={(e) => handleQuestionChange(qIndex, 'correctAnswer', parseInt(e.target.value))}
+                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                          >
+                            {question.options.map((_, idx) => (
+                              <option key={idx} value={idx}>
+                                Option {idx + 1}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
                         <div>

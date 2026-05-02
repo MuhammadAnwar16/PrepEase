@@ -18,6 +18,8 @@ import CourseMaterials from './pages/teacher/CourseMaterials';
 import CreateAssessment from './pages/teacher/CreateAssessment';
 import ClassAnalytics from './pages/teacher/ClassAnalytics';
 import AssignmentGrading from './pages/teacher/AssignmentGrading';
+import QuizUpload from './pages/teacher/QuizUpload';
+import QuizAttempts from './pages/teacher/QuizAttempts';
 
 // Admin Pages
 import UserManagement from './pages/admin/UserManagement';
@@ -42,9 +44,11 @@ const App: React.FC = () => {
         {/* Teacher Routes */}
         <Route path="/teacher/dashboard" element={<Layout role="teacher"><TeacherDashboard /></Layout>} />
         <Route path="/teacher/materials" element={<Layout role="teacher"><CourseMaterials /></Layout>} />
+        <Route path="/teacher/quizzes" element={<Layout role="teacher"><QuizUpload /></Layout>} />
+        <Route path="/teacher/quizzes/:quizId/attempts" element={<Layout role="teacher"><QuizAttempts /></Layout>} />
         <Route path="/teacher/create-quiz" element={<Layout role="teacher"><CreateAssessment /></Layout>} />
         <Route path="/teacher/analytics" element={<Layout role="teacher"><ClassAnalytics /></Layout>} />
-  <Route path="/teacher/assignments/:assignmentId/grade" element={<Layout role="teacher"><AssignmentGrading /></Layout>} />
+        <Route path="/teacher/assignments/:assignmentId/grade" element={<Layout role="teacher"><AssignmentGrading /></Layout>} />
 
         {/* Admin Routes */}
         <Route path="/admin/users" element={<Layout role="admin"><UserManagement /></Layout>} />

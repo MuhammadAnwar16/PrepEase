@@ -637,6 +637,13 @@ export const getMyCourseDetails = async (req, res) => {
     // Analyze weak topics from quiz attempts
     const weakTopics = {};
     const topicStats = {};
+    const quizInfoMap = quizzes.reduce((acc, quiz, index) => {
+      acc[quiz._id.toString()] = {
+        title: quiz.title,
+        number: index + 1,
+      };
+      return acc;
+    }, {});
 
     if (quizIds.length > 0) {
       const allQuizzesWithQuestions = await Quiz.find({ _id: { $in: quizIds }, isActive: true })
@@ -658,37 +665,63 @@ export const getMyCourseDetails = async (req, res) => {
       detailedAttempts.forEach((attempt) => {
         const quizId = attempt.quizId.toString();
         const questions = quizQuestionsMap[quizId] || [];
+        const quizInfo = quizInfoMap[quizId];
+        const quizLabel = quizInfo ? `Quiz ${quizInfo.number}: ${quizInfo.title}` : `Quiz`;
 
         (attempt.answers || []).forEach((answer) => {
           const question = questions[answer.questionIndex];
           if (question) {
             const topic = question.topic || "General";
+            const topicKey = `${quizId}__${topic}`;
 
-            if (!topicStats[topic]) {
-              topicStats[topic] = {
+            if (!topicStats[topicKey]) {
+              topicStats[topicKey] = {
                 total: 0,
                 correct: 0,
                 percentage: 0,
+                quizzes: [],
+                topic,
+                quizLabel,
+                wrongQuestions: [],
               };
             }
 
-            topicStats[topic].total += 1;
+            topicStats[topicKey].total += 1;
+            if (!topicStats[topicKey].quizzes.includes(quizLabel)) {
+              topicStats[topicKey].quizzes.push(quizLabel);
+            }
             if (answer.isCorrect) {
-              topicStats[topic].correct += 1;
+              topicStats[topicKey].correct += 1;
+            } else {
+              const questionText = question.question || `Question ${answer.questionIndex + 1}`;
+              if (!topicStats[topicKey].wrongQuestions.includes(questionText)) {
+                topicStats[topicKey].wrongQuestions.push(questionText);
+              }
             }
           }
         });
       });
 
       // Calculate percentages and identify weak topics
-      Object.keys(topicStats).forEach((topic) => {
-        const stats = topicStats[topic];
+      Object.keys(topicStats).forEach((topicKey) => {
+        const stats = topicStats[topicKey];
         stats.percentage = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
         if (stats.percentage < 70) {
-          weakTopics[topic] = stats;
+          weakTopics[topicKey] = stats;
         }
       });
     }
+
+    const weakTopicList = Object.keys(weakTopics).map((topicKey) => ({
+      topic: weakTopics[topicKey].topic,
+      quizLabel: weakTopics[topicKey].quizLabel,
+      displayLabel: `${weakTopics[topicKey].quizLabel} • ${weakTopics[topicKey].topic}`,
+      percentage: weakTopics[topicKey].percentage,
+      totalQuestions: weakTopics[topicKey].total,
+      correctAnswers: weakTopics[topicKey].correct,
+      quizzes: weakTopics[topicKey].quizzes || [],
+      wrongQuestions: weakTopics[topicKey].wrongQuestions || [],
+    }));
 
     return res.status(200).json({
       message: "Course performance retrieved successfully.",
@@ -700,13 +733,9 @@ export const getMyCourseDetails = async (req, res) => {
         quizAttempts: quizAttemptsCount,
         averageQuizScore,
         performanceScore,
-        weakTopics: Object.keys(weakTopics).map((topic) => ({
-          topic,
-          percentage: weakTopics[topic].percentage,
-          totalQuestions: weakTopics[topic].total,
-          correctAnswers: weakTopics[topic].correct,
-        })),
+        weakTopics: weakTopicList,
       },
+      weakTopics: weakTopicList,
       assignments,
       quizzes: quizDetails,
     });
