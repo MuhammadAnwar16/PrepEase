@@ -8,7 +8,8 @@ import {
   LogOut,
   BookOpen,
   FileText,
-  HelpCircle
+  HelpCircle,
+  Sparkles
 } from 'lucide-react';
 
 const TeacherLayout = () => {
@@ -60,13 +61,6 @@ const TeacherLayout = () => {
           </Link>
           <Link to="/teacher/analytics" className={navItemClass('/teacher/analytics')}>
             <PlusCircle size={18} strokeWidth={1.5} /> Class Analytics
-          </Link>
-          <div className="font-mono text-[10px] uppercase tracking-widest px-4 mt-6 mb-2 text-stone-400 font-bold">Resources</div>
-          <Link to="/teacher/materials" className={navItemClass('/teacher/materials')}>
-            <BookOpen size={18} strokeWidth={1.5} /> Course Materials
-          </Link>
-          <Link to="/teacher/assessment" className={navItemClass('/teacher/assessment')}>
-            <PlusCircle size={18} strokeWidth={1.5} /> Create Assessment
           </Link>
           <div className="font-mono text-[10px] uppercase tracking-widest px-4 mt-6 mb-2 text-stone-400 font-bold">Account</div>
           <Link to="/teacher/settings" className={navItemClass('/teacher/settings')}>

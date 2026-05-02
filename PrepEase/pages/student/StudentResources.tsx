@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../../src/api/axiosInstance';
-import { FileText, ExternalLink, Sparkles, ArrowLeft, AlertCircle, Loader } from 'lucide-react';
+import { FileText, ExternalLink, Sparkles, ArrowLeft, AlertCircle, Loader, MessageCircle, Copy, Search } from 'lucide-react';
 
 interface Material {
   _id: string;
@@ -61,10 +61,15 @@ const StudentResources: React.FC = () => {
             <Sparkles className="text-stone-900" size={24} strokeWidth={1.5} />
             Personalized Discovery
         </h2>
-        <p className="text-stone-600 font-sans">
-            Our AI analyzed your recent quiz performance in Web Engineering. 
-            You seemed to struggle with <strong>Recursion</strong>. Here are some targeted resources.
+        <p className="text-stone-600 font-sans mb-4">
+            Find YouTube videos, articles, and curated resources based on your course materials and topics.
         </p>
+        <button
+          onClick={() => navigate('/resources-discover')}
+          className="inline-flex items-center gap-2 px-6 py-2 rounded-sm border border-stone-900 bg-stone-900 text-white hover:bg-stone-700 transition-colors font-mono text-[10px] font-bold uppercase tracking-widest"
+        >
+          <Search size={16} /> Discover Resources
+        </button>
       </div>
 
       <div>
@@ -101,14 +106,32 @@ const StudentResources: React.FC = () => {
                   {material.course?.title || 'Course material'}
                 </p>
                 {material.fileUrl ? (
-                  <a
-                    href={material.fileUrl.startsWith('http') ? material.fileUrl : `${API_BASE_URL}${material.fileUrl}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full py-2 border border-stone-200 rounded-sm text-sm font-sans font-bold text-stone-900 hover:bg-stone-50 flex items-center justify-center gap-2 transition-colors"
-                  >
-                    Open Material <ExternalLink size={14} strokeWidth={1.5} />
-                  </a>
+                  <div className="space-y-2">
+                    <a
+                      href={material.fileUrl.startsWith('http') ? material.fileUrl : `${API_BASE_URL}${material.fileUrl}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full py-2 border border-stone-200 rounded-sm text-sm font-sans font-bold text-stone-900 hover:bg-stone-50 flex items-center justify-center gap-2 transition-colors"
+                    >
+                      Open Material <ExternalLink size={14} strokeWidth={1.5} />
+                    </a>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => navigate(`/chat/${material._id}`)}
+                        disabled={material.status !== 'Ready'}
+                        className="flex-1 py-2 border border-stone-900 rounded-sm text-sm font-sans font-bold text-stone-900 hover:bg-stone-900 hover:text-white flex items-center justify-center gap-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-stone-900"
+                      >
+                        Ask Buddy <MessageCircle size={14} strokeWidth={1.5} />
+                      </button>
+                      <button
+                        onClick={() => navigate('/flashcards')}
+                        disabled={material.status !== 'Ready'}
+                        className="flex-1 py-2 border border-stone-200 rounded-sm text-sm font-sans font-bold text-stone-900 hover:bg-stone-50 flex items-center justify-center gap-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Cards <Copy size={14} strokeWidth={1.5} />
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <button
                     disabled

@@ -33,6 +33,7 @@ export const materialAPI = {
     },
   }),
   getAll: () => api.get('/materials'),
+  getById: (id) => api.get(`/materials/${id}`),
   delete: (id) => api.delete(`/materials/${id}`),
 };
 

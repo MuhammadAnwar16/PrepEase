@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, AlertTriangle, ArrowLeft, Loader } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { TrendingUp, AlertTriangle, ArrowLeft, Loader, AlertCircle, CheckCircle, Lightbulb } from 'lucide-react';
 import axiosInstance from '../../src/api/axiosInstance';
 
 interface Course {
@@ -57,6 +57,7 @@ const StudentAnalytics: React.FC = () => {
   const [quizzes, setQuizzes] = useState<QuizDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [weakTopics, setWeakTopics] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchCourses = async () => {
@@ -86,11 +87,17 @@ const StudentAnalytics: React.FC = () => {
         setSummary(response.data.summary || null);
         setAssignments(response.data.assignments || []);
         setQuizzes(response.data.quizzes || []);
+        setWeakTopics(response.data.weakTopics || []);
       } catch (err: any) {
-        setError(err?.response?.data?.message || 'Failed to load performance data');
+          const serverMessage = err?.response?.data?.message;
+          const status = err?.response?.status;
+          const message = serverMessage || err?.message || 'Failed to load performance data';
+          console.error('[StudentAnalytics] fetchPerformance error:', err);
+          setError(`${message}${status ? ` (status ${status})` : ''}`);
         setSummary(null);
         setAssignments([]);
         setQuizzes([]);
+          setWeakTopics([]);
       } finally {
         setLoading(false);
       }
@@ -107,6 +114,95 @@ const StudentAnalytics: React.FC = () => {
       { name: 'Overall', score: summary.performanceScore || 0 },
     ];
   }, [summary]);
+
+  // Calculate performance insights and recommendations
+  const insights = useMemo(() => {
+    const issues: any[] = [];
+    const recommendations: any[] = [];
+
+    if (!summary) return { issues, recommendations, weakAreas: [] };
+
+    // Check assignment performance
+    if (summary.averageAssignmentScore < 70) {
+      issues.push({
+        type: 'assignment',
+        severity: summary.averageAssignmentScore < 50 ? 'critical' : 'warning',
+        title: 'Low Assignment Performance',
+        score: summary.averageAssignmentScore,
+        message: `Your average assignment score is ${summary.averageAssignmentScore}%, which is below the target.`,
+      });
+      recommendations.push({
+        icon: Lightbulb,
+        title: 'Improve Assignment Skills',
+        tips: [
+          'Review feedback from previous assignments',
+          'Start assignments earlier to have more time',
+          'Ask for help if concepts are unclear',
+          'Practice similar problems before submission',
+        ],
+      });
+    }
+
+    // Check quiz performance
+    if (summary.averageQuizScore < 70) {
+      issues.push({
+        type: 'quiz',
+        severity: summary.averageQuizScore < 50 ? 'critical' : 'warning',
+        title: 'Low Quiz Performance',
+        score: summary.averageQuizScore,
+        message: `Your average quiz score is ${summary.averageQuizScore}%, indicating concept gaps.`,
+      });
+      recommendations.push({
+        icon: Lightbulb,
+        title: 'Strengthen Quiz Preparation',
+        tips: [
+          'Review course materials before each quiz',
+          'Take practice quizzes to build confidence',
+          'Focus on weak topics',
+          'Attend all lectures and take notes',
+        ],
+      });
+    }
+
+    // Check submission rate
+    const submissionRate = summary.assignmentTotal > 0 
+      ? (summary.assignmentSubmitted / summary.assignmentTotal) * 100 
+      : 0;
+    if (submissionRate < 80) {
+      issues.push({
+        type: 'submission',
+        severity: 'warning',
+        title: 'Low Submission Rate',
+        score: submissionRate,
+        message: `You've only submitted ${Math.round(submissionRate)}% of assignments.`,
+      });
+    }
+
+    // Check overall performance
+    if (summary.performanceScore < 70) {
+      recommendations.push({
+        icon: AlertCircle,
+        title: 'Overall Performance Below Target',
+        tips: [
+          'Set a study schedule and stick to it',
+          'Allocate more time to this course',
+          'Form study groups with peers',
+          'Visit instructor office hours',
+          'Use available tutoring resources',
+        ],
+      });
+    }
+
+    const weakAreas = assignments.filter(a => a.score && a.totalMarks && (a.score / a.totalMarks) < 0.7)
+      .concat(quizzes.filter(q => q.latestScore && q.latestScore < 70).map((q, idx) => ({ 
+        assessmentId: `quiz-${idx}`,
+        title: q.title,
+        score: q.latestScore,
+        totalMarks: 100
+      })));
+
+    return { issues, recommendations, weakAreas };
+  }, [summary, assignments, quizzes, weakTopics]);
 
   return (
     <div className="space-y-8 bg-[#FDFBF7] -m-8 p-8 min-h-screen">
@@ -205,6 +301,121 @@ const StudentAnalytics: React.FC = () => {
         </div>
       </div>
 
+      {/* Performance Issues and Weak Areas */}
+      {insights.issues.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-serif font-bold text-stone-900">⚠️ Performance Issues</h2>
+          <div className="grid grid-cols-1 gap-4">
+            {insights.issues.map((issue, idx) => (
+              <div 
+                key={idx}
+                className={`p-4 rounded-sm border-l-4 ${
+                  issue.severity === 'critical'
+                    ? 'bg-rose-50 border-l-rose-600 border border-rose-200'
+                    : 'bg-amber-50 border-l-amber-600 border border-amber-200'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <AlertCircle 
+                    size={20} 
+                    className={issue.severity === 'critical' ? 'text-rose-600' : 'text-amber-600'}
+                    strokeWidth={1.5}
+                  />
+                  <div className="flex-1">
+                    <p className={`font-bold text-sm ${issue.severity === 'critical' ? 'text-rose-900' : 'text-amber-900'}`}>
+                      {issue.title}
+                    </p>
+                    <p className={`text-sm mt-1 ${issue.severity === 'critical' ? 'text-rose-800' : 'text-amber-800'}`}>
+                      {issue.message}
+                    </p>
+                    <p className={`text-xs font-mono font-bold mt-2 ${issue.severity === 'critical' ? 'text-rose-700' : 'text-amber-700'}`}>
+                      Current Score: {Math.round(issue.score)}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Weak Areas Detection */}
+      {insights.weakAreas.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-serif font-bold text-stone-900">📊 Areas Needing Improvement</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {insights.weakAreas.slice(0, 6).map((area) => (
+              <div key={area.assessmentId} className="bg-gradient-to-br from-rose-50 to-rose-100 p-4 rounded-sm border border-rose-200">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle size={18} className="text-rose-600 mt-1" strokeWidth={1.5} />
+                  <div className="flex-1">
+                    <p className="font-semibold text-stone-900 text-sm mb-2">{area.title}</p>
+                    <div className="w-full bg-white rounded-sm h-2 mb-2 overflow-hidden border border-rose-200">
+                      <div 
+                        className="bg-gradient-to-r from-rose-400 to-rose-600 h-full"
+                        style={{ width: `${Math.min((area.score / area.totalMarks) * 100, 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-rose-700 font-mono font-bold">
+                      Score: {Math.round((area.score / area.totalMarks) * 100)}% ({area.score}/{area.totalMarks})
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {insights.weakAreas.length > 6 && (
+            <p className="text-xs text-stone-500 font-sans">
+              ...and {insights.weakAreas.length - 6} more areas need improvement
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Recommendations */}
+      {insights.recommendations.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-serif font-bold text-stone-900">💡 Recommendations to Improve</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {insights.recommendations.map((rec, idx) => {
+              const IconComponent = rec.icon;
+              return (
+                <div key={idx} className="bg-gradient-to-br from-emerald-50 to-emerald-100 p-6 rounded-sm border border-emerald-200">
+                  <div className="flex items-start gap-3 mb-4">
+                    <IconComponent size={24} className="text-emerald-700 flex-shrink-0" strokeWidth={1.5} />
+                    <h3 className="font-semibold text-stone-900 text-sm">{rec.title}</h3>
+                  </div>
+                  <ul className="space-y-2">
+                    {rec.tips.map((tip, tipIdx) => (
+                      <li key={tipIdx} className="text-xs text-emerald-900 font-sans flex items-start gap-2">
+                        <span className="text-emerald-700 font-bold mt-0.5">✓</span>
+                        <span>{tip}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {insights.issues.length === 0 && summary && (
+        <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 p-6 rounded-sm border border-emerald-200">
+          <div className="flex items-start gap-3">
+            <CheckCircle size={24} className="text-emerald-700 flex-shrink-0" strokeWidth={1.5} />
+            <div>
+              <p className="font-semibold text-emerald-900">Great Performance! 🎉</p>
+              <p className="text-sm text-emerald-800 mt-1">
+                You're performing well in this course. Keep up the good work and maintain your progress!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assignments and Quizzes Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-6 rounded-sm border border-stone-200 shadow-sm">
           <h3 className="font-serif font-bold text-stone-900 mb-4 tracking-tight text-lg">Assignments</h3>
@@ -293,6 +504,7 @@ const StudentAnalytics: React.FC = () => {
         </div>
       </div>
     </div>
+    
   );
 };
 

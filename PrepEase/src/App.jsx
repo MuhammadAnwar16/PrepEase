@@ -14,6 +14,9 @@ import StudentAnalytics from "../pages/student/StudentAnalytics";
 import CourseDetail from "../pages/student/CourseDetail";
 import StudentSettings from "../pages/student/Settings";
 import QuizRunner from "./components/QuizRunner.tsx";
+import StudyBuddyChat from "../pages/student/StudyBuddyChat.tsx";
+import FlashcardGenerator from "../pages/student/FlashcardGenerator.tsx";
+import ResourceSuggestions from "../pages/student/ResourceSuggestions.tsx";
 
 // Teacher Portal Pages
 import TeacherDashboard from "../pages/teacher/TeacherDashboard";
@@ -27,6 +30,7 @@ import StudentProgress from "../pages/teacher/StudentProgress";
 import AssignmentGrading from "../pages/teacher/AssignmentGrading";
 import QuizAttempts from "../pages/teacher/QuizAttempts";
 import TeacherSettings from "../pages/teacher/Settings";
+import AIGenerator from "../pages/teacher/AIGenerator.tsx";
 
 // Admin Portal Pages
 import UserManagement from "../pages/admin/UserManagement";
@@ -58,6 +62,7 @@ const App = () => {
               <Route path="/teacher/materials" element={<CourseMaterials />} />
               <Route path="/teacher/assessment" element={<CreateAssessment />} />
               <Route path="/teacher/analytics" element={<ClassAnalytics />} />
+              <Route path="/teacher/ai-generator" element={<AIGenerator />} />
               <Route path="/teacher/settings" element={<TeacherSettings />} />
             </Route>
           </Route>
@@ -71,6 +76,10 @@ const App = () => {
               <Route path="/student/analytics" element={<StudentAnalytics />} />
               <Route path="/student/course/:id" element={<CourseDetail />} />
               <Route path="/student/quiz/:quizId" element={<QuizRunner />} />
+              <Route path="/chat/:materialId" element={<StudyBuddyChat />} />
+              <Route path="/chat" element={<StudyBuddyChat />} />
+              <Route path="/flashcards" element={<FlashcardGenerator />} />
+              <Route path="/resources-discover" element={<ResourceSuggestions />} />
               <Route path="/student/settings" element={<StudentSettings />} />
             </Route>
           </Route>

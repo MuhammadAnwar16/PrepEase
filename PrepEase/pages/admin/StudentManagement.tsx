@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Plus, Search, Loader, GraduationCap, Edit2 } from 'lucide-react';
+import { Trash2, Plus, Search, Loader, GraduationCap, Edit2, BookOpen } from 'lucide-react';
 import axiosInstance from '../../src/api/axiosInstance';
 
 const MAIN_DEPARTMENT = 'Information and Technology';
@@ -15,6 +15,11 @@ const StudentManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any>(null);
+  const [showCourseModal, setShowCourseModal] = useState(false);
+  const [selectedStudentForCourses, setSelectedStudentForCourses] = useState<any>(null);
+  const [allCourses, setAllCourses] = useState<any[]>([]);
+  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+  const [assigningCourses, setAssigningCourses] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -38,6 +43,7 @@ const StudentManagement: React.FC = () => {
 
   useEffect(() => {
     fetchStudents();
+    fetchAllCourses();
   }, []);
 
   const fetchStudents = async () => {
@@ -50,6 +56,15 @@ const StudentManagement: React.FC = () => {
       setError(err?.response?.data?.message || 'Failed to fetch students');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAllCourses = async () => {
+    try {
+      const response = await axiosInstance.get('/courses');
+      setAllCourses(response.data.courses || []);
+    } catch (err: any) {
+      console.error('Failed to fetch courses:', err);
     }
   };
 
@@ -156,6 +171,43 @@ const StudentManagement: React.FC = () => {
     }
   };
 
+  const handleOpenCourseModal = (student: any) => {
+    setSelectedStudentForCourses(student);
+    setSelectedCourses(student.availableCourses?.map((c: any) => c._id || c) || []);
+    setShowCourseModal(true);
+  };
+
+  const handleAssignCourses = async () => {
+    if (!selectedStudentForCourses?._id) return;
+
+    setAssigningCourses(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await axiosInstance.post(`/courses/assign-to-student/${selectedStudentForCourses._id}`, {
+        courseIds: selectedCourses,
+      });
+      setSuccess('Courses assigned to student successfully!');
+      setShowCourseModal(false);
+      setSelectedStudentForCourses(null);
+      setSelectedCourses([]);
+      fetchStudents();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to assign courses');
+    } finally {
+      setAssigningCourses(false);
+    }
+  };
+
+  const toggleCourse = (courseId: string) => {
+    setSelectedCourses((prev) =>
+      prev.includes(courseId)
+        ? prev.filter((id) => id !== courseId)
+        : [...prev, courseId]
+    );
+  };
+
   const filteredStudents = students.filter((student) =>
     student.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     student.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -238,6 +290,13 @@ const StudentManagement: React.FC = () => {
                       {new Date(student.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => handleOpenCourseModal(student)}
+                        className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-sm transition"
+                        title="Manage courses"
+                      >
+                        <BookOpen size={18} strokeWidth={1.5} />
+                      </button>
                       <button
                         onClick={() => handleEditStudent(student)}
                         className="p-2 text-stone-700 hover:bg-stone-100 rounded-sm transition"
@@ -477,7 +536,71 @@ const StudentManagement: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+
+      {showCourseModal && selectedStudentForCourses && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-stone-50 rounded-sm shadow-xl max-w-2xl w-full p-6 border border-stone-200 my-8">
+            <h2 className="text-2xl font-serif font-bold text-stone-900 mb-2">
+              Manage Courses for {selectedStudentForCourses.firstName} {selectedStudentForCourses.lastName}
+            </h2>
+            <p className="text-stone-600 font-sans mb-6">Select which courses this student can access</p>
+
+            <div className="max-h-96 overflow-y-auto border border-stone-200 rounded-sm p-4 bg-white mb-6">
+              {allCourses.length > 0 ? (
+                <div className="space-y-3">
+                  {allCourses
+                    .sort((a, b) => (a.department || '').localeCompare(b.department || ''))
+                    .map((course) => (
+                      <label key={course._id} className="flex items-start gap-3 p-2 rounded-sm hover:bg-stone-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedCourses.includes(course._id)}
+                          onChange={() => toggleCourse(course._id)}
+                          className="mt-1 w-4 h-4 accent-stone-900 cursor-pointer"
+                        />
+                        <div className="flex-1">
+                          <p className="font-semibold text-stone-900 font-sans">
+                            {course.courseCode} - {course.title}
+                          </p>
+                          <p className="text-xs text-stone-500 font-sans">
+                            {course.department} • Sem {course.programSemester} • {course.credits} credits
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                </div>
+              ) : (
+                <p className="text-stone-500 font-sans text-center py-8">No courses available</p>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center">
+              <p className="text-sm font-sans text-stone-600">
+                {selectedCourses.length} course{selectedCourses.length !== 1 ? 's' : ''} selected
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCourseModal(false);
+                    setSelectedStudentForCourses(null);
+                    setSelectedCourses([]);
+                  }}
+                  className="px-4 py-2 border border-stone-200 text-stone-900 rounded-sm hover:bg-stone-100 transition font-sans font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAssignCourses}
+                  disabled={assigningCourses}
+                  className="px-4 py-2 bg-stone-900 text-white rounded-sm hover:bg-emerald-700 transition font-sans font-bold disabled:opacity-50"
+                >
+                  {assigningCourses ? 'Assigning...' : 'Assign Courses'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}    </div>
   );
 };
 

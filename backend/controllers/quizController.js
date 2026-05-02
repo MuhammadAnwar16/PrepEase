@@ -1,11 +1,9 @@
-import axios from "axios";
 import Quiz from "../models/Quiz.js";
 import QuizAttempt from "../models/QuizAttempt.js";
 import CourseMaterial from "../models/CourseMaterial.js";
 import Course from "../models/Course.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
-
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
+import { generateQuiz as generateQuizWithGemini } from "../services/geminiService.js";
 
 /**
  * Generate Quiz from Material
@@ -46,11 +44,10 @@ export const generateQuiz = async (req, res) => {
       });
     }
 
-    // Verify material has been processed by AI
-    if (material.aiStatus !== "processed") {
+    // Check if material has extracted text
+    if (!material.extractedText || material.extractedText.trim().length === 0) {
       return res.status(400).json({
-        message: "Material is not yet processed by AI service. Please try again later.",
-        aiStatus: material.aiStatus,
+        message: "Material text is not available. Please re-upload the material.",
       });
     }
 
@@ -69,23 +66,17 @@ export const generateQuiz = async (req, res) => {
       });
     }
 
-    // Call AI service to generate quiz
+    // Generate quiz using Gemini
     try {
-      console.log(`[Quiz] Generating quiz for material ${materialId}`);
+      console.log(`[Quiz] Generating quiz for material ${materialId} with Gemini AI`);
 
-      const aiResponse = await axios.post(
-        `${AI_SERVICE_URL}/generate-quiz`,
-        {
-          materialId: materialId.toString(),
-          difficulty,
-          questionCount,
-        },
-        {
-          timeout: 60000, // 60 second timeout for quiz generation
-        }
+      const quizData = await generateQuizWithGemini(
+        material.extractedText,
+        difficulty,
+        questionCount
       );
 
-      const aiQuestions = aiResponse.data.questions;
+      const aiQuestions = quizData.questions;
 
       if (!aiQuestions || aiQuestions.length === 0) {
         return res.status(500).json({
@@ -139,23 +130,11 @@ export const generateQuiz = async (req, res) => {
         },
       });
     } catch (aiError) {
-      console.error("[Quiz] AI service error:", aiError.message);
+      console.error("[Quiz] Gemini AI error:", aiError.message);
 
-      if (aiError.code === "ECONNREFUSED") {
-        return res.status(503).json({
-          message: "AI service is currently unavailable. Please try again later.",
-        });
-      }
-
-      if (aiError.response?.status === 404) {
-        return res.status(404).json({
-          message: "Material not found in AI service. Please re-upload the material.",
-        });
-      }
-
-      return res.status(502).json({
-        message: "Failed to generate quiz from AI service.",
-        error: aiError.response?.data?.detail || aiError.message,
+      return res.status(500).json({
+        message: "Failed to generate quiz using AI.",
+        error: aiError.message,
       });
     }
   } catch (error) {

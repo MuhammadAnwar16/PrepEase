@@ -61,13 +61,21 @@ const CourseDetail: React.FC = () => {
         const loadedMaterials = materialsRes.data.materials || [];
         setMaterials(loadedMaterials);
         
-        // Auto-select first material for chat
-        if (loadedMaterials.length > 0) {
-          setSelectedMaterial(loadedMaterials[0]);
+        // Auto-select first READY material for chat
+        const readyMaterials = loadedMaterials.filter((m: Material) => m.status === 'Ready');
+        if (readyMaterials.length > 0) {
+          setSelectedMaterial(readyMaterials[0]);
           setMessages([{
             id: 'm1',
             sender: 'ai',
-            text: `Hi! I'm your AI Study Buddy. I can answer questions about "${loadedMaterials[0].title}". Ask me anything!`,
+            text: `Hi! I'm your AI Study Buddy. I can answer questions about "${readyMaterials[0].title}". Ask me anything!`,
+            timestamp: new Date()
+          }]);
+        } else if (loadedMaterials.length > 0) {
+          setMessages([{
+            id: 'm1',
+            sender: 'ai',
+            text: `Hi! I'm your AI Study Buddy. Materials are being processed. Please check back in a moment!`,
             timestamp: new Date()
           }]);
         }
@@ -85,6 +93,32 @@ const CourseDetail: React.FC = () => {
     setFlippedCards(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const handleMaterialChange = (materialId: string) => {
+    const nextMaterial = materials.find((material) => material._id === materialId) || null;
+    setSelectedMaterial(nextMaterial);
+
+    if (!nextMaterial) {
+      setMessages([]);
+      return;
+    }
+
+    if (nextMaterial.status === 'Ready') {
+      setMessages([{
+        id: Date.now().toString(),
+        sender: 'ai',
+        text: `Hi! I'm your AI Study Buddy. I can answer questions about "${nextMaterial.title}". Ask me anything!`,
+        timestamp: new Date()
+      }]);
+    } else {
+      setMessages([{
+        id: Date.now().toString(),
+        sender: 'ai',
+        text: `"${nextMaterial.title}" is still being processed. Please come back once it is marked Ready.`,
+        timestamp: new Date()
+      }]);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!input.trim()) return;
     
@@ -93,6 +127,18 @@ const CourseDetail: React.FC = () => {
         id: Date.now().toString(),
         sender: 'ai',
         text: 'Please select a material/lecture to chat about.',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMsg]);
+      return;
+    }
+
+    // Check if material is ready
+    if (selectedMaterial.status !== 'Ready') {
+      const errorMsg: ChatMessage = {
+        id: Date.now().toString(),
+        sender: 'ai',
+        text: 'This material is still being processed. Please try again in a moment.',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMsg]);
@@ -208,20 +254,50 @@ const CourseDetail: React.FC = () => {
                         <div className="text-sm font-sans font-bold text-stone-900">
                           {material.title || material.fileName || 'Untitled'}
                         </div>
-                        <div className="text-xs font-sans text-stone-500">Status: {material.status || 'Pending'}</div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-xs font-mono uppercase tracking-wider px-2 py-0.5 rounded-sm ${
+                            material.status === 'Ready' ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' :
+                            material.status === 'Processing' ? 'bg-amber-100 text-amber-700 border border-amber-300' :
+                            material.status === 'Failed' ? 'bg-rose-100 text-rose-700 border border-rose-300' :
+                            'bg-stone-100 text-stone-600 border border-stone-300'
+                          }`}>
+                            {material.status || 'Pending'}
+                          </span>
+                          {material.status === 'Ready' && (
+                            <span className="text-xs font-sans text-emerald-600">● Ready for AI Chat</span>
+                          )}
+                        </div>
                       </div>
-                      {material.fileUrl ? (
-                        <a
-                          href={material.fileUrl.startsWith('http') ? material.fileUrl : `${API_BASE_URL}${material.fileUrl}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-sm font-mono font-bold uppercase text-stone-900 hover:text-emerald-700 transition-colors"
-                        >
-                          Open <ExternalLink size={14} strokeWidth={1.5} />
-                        </a>
-                      ) : (
-                        <span className="text-xs font-sans text-stone-400">Not available</span>
-                      )}
+                          <div className="flex items-center gap-3">
+                            {material.status === 'Ready' && (
+                              <>
+                                <button
+                                  onClick={() => navigate(`/chat/${material._id}`)}
+                                  className="inline-flex items-center gap-1 text-sm font-mono font-bold uppercase text-stone-900 hover:text-emerald-700 transition-colors"
+                                >
+                                  Ask Study Buddy <MessageCircle size={14} strokeWidth={1.5} />
+                                </button>
+                                <button
+                                  onClick={() => navigate('/flashcards')}
+                                  className="inline-flex items-center gap-1 text-sm font-mono font-bold uppercase text-stone-900 hover:text-emerald-700 transition-colors"
+                                >
+                                  Cards <Copy size={14} strokeWidth={1.5} />
+                                </button>
+                              </>
+                            )}
+                            {material.fileUrl ? (
+                              <a
+                                href={material.fileUrl.startsWith('http') ? material.fileUrl : `${API_BASE_URL}${material.fileUrl}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-sm font-mono font-bold uppercase text-stone-900 hover:text-emerald-700 transition-colors"
+                              >
+                                Open <ExternalLink size={14} strokeWidth={1.5} />
+                              </a>
+                            ) : (
+                              <span className="text-xs font-sans text-stone-400">Not available</span>
+                            )}
+                          </div>
                     </div>
                   ))}
                 </div>
@@ -232,9 +308,16 @@ const CourseDetail: React.FC = () => {
 
         {/* TAB 2: FLASHCARDS */}
         {activeTab === 2 && (
-          <div className="text-center py-12 font-sans">
-            <BookOpen size={48} className="mx-auto mb-4 text-stone-300" strokeWidth={1.5} />
-            <p className="text-stone-500">Flashcards will be available soon.</p>
+          <div className="text-center py-12 font-sans animate-fadeIn">
+            <Copy size={48} className="mx-auto mb-4 text-stone-300" strokeWidth={1.5} />
+            <p className="text-stone-900 font-bold text-lg mb-2">Generate Study Flashcards</p>
+            <p className="text-stone-500 mb-6">Select materials and generate custom flashcards with 5, 10, or 15 cards.</p>
+            <button
+              onClick={() => navigate('/flashcards')}
+              className="inline-flex items-center gap-2 bg-stone-900 text-white hover:bg-emerald-700 rounded-sm px-6 py-2.5 text-[10px] font-mono uppercase tracking-widest transition-colors shadow-sm font-bold"
+            >
+              Open Flashcard Generator
+            </button>
           </div>
         )}
 
@@ -260,6 +343,26 @@ const CourseDetail: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-white">
+              {materials.length > 0 && (
+                <div className="mb-2 rounded-sm border border-stone-200 bg-stone-50 p-3">
+                  <label className="block text-[10px] font-mono font-bold uppercase tracking-widest text-stone-400 mb-2">
+                    Select material to ask about
+                  </label>
+                  <select
+                    value={selectedMaterial?._id || ''}
+                    onChange={(e) => handleMaterialChange(e.target.value)}
+                    className="w-full rounded-sm border border-stone-200 bg-white px-3 py-2 text-sm font-sans focus:outline-none focus:border-stone-900"
+                  >
+                    <option value="">Choose a material</option>
+                    {materials.map((material) => (
+                      <option key={material._id} value={material._id}>
+                        {material.title || material.fileName || 'Untitled'}{material.status ? ` • ${material.status}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {messages.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`

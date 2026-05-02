@@ -1,6 +1,10 @@
+// Load environment variables FIRST before any other imports
+import dotenv from "dotenv";
+dotenv.config();
+
+// Now import everything else
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import connectDB from "./config/db.js";
@@ -14,10 +18,11 @@ import chatRoutes from "./routes/chatRoutes.js";
 import assessmentRoutes from "./routes/assessmentRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
 import studyBuddyRoutes from "./routes/studyBuddyRoutes.js";
+import flashcardRoutes from "./routes/flashcardRoutes.js";
 import apiLimiter from "./middleware/rateLimit.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
-
-dotenv.config();
+import { flattenSpring2026Catalog } from "./config/spring2026Catalog.js";
+import Course from "./models/Course.js";
 
 const app = express();
 
@@ -57,6 +62,7 @@ app.use("/api/materials", materialRoutes);
 app.use("/api/assessments", assessmentRoutes);
 app.use("/api/quizzes", quizRoutes);
 app.use("/api/study-buddy", studyBuddyRoutes);
+app.use("/api/flashcards", flashcardRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -65,6 +71,22 @@ const PORT = process.env.PORT || 5001;
 
 const startServer = async () => {
   await connectDB();
+
+  await Course.collection.dropIndex("courseCode_1").catch(() => {});
+  await Course.syncIndexes().catch(() => {});
+  const catalogCourses = flattenSpring2026Catalog();
+  for (const courseData of catalogCourses) {
+    await Course.findOneAndUpdate(
+      {
+        department: courseData.department,
+        programSemester: courseData.programSemester,
+        courseCode: courseData.courseCode,
+      },
+      { $set: courseData },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+  }
+
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });

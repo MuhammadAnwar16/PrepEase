@@ -35,17 +35,12 @@ const courseMaterialSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Pending", "Processing", "Ready"],
+      enum: ["Pending", "Processing", "Ready", "Failed"],
       default: "Pending",
     },
-    textContent: {
+    extractedText: {
       type: String,
       default: "",
-    },
-    aiStatus: {
-      type: String,
-      enum: ["pending", "processed", "failed"],
-      default: "pending",
     },
     materialType: {
       type: String,

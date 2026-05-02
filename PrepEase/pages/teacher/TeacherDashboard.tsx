@@ -8,8 +8,7 @@ const TeacherDashboard: React.FC = () => {
     const [error, setError] = useState('');
     const [courseStats, setCourseStats] = useState<any[]>([]);
 
-    useEffect(() => {
-        const fetchDashboard = async () => {
+    const fetchDashboard = async () => {
             try {
                 setLoading(true);
                 setError('');
@@ -87,8 +86,17 @@ const TeacherDashboard: React.FC = () => {
             }
         };
 
-        fetchDashboard();
-    }, []);
+        useEffect(() => {
+            fetchDashboard();
+
+            const handler = () => {
+                // refresh dashboard when assessments/quizzes are created
+                fetchDashboard();
+            };
+
+            window.addEventListener('assessmentCreated', handler);
+            return () => window.removeEventListener('assessmentCreated', handler);
+        }, []);
 
     const totals = useMemo(() => {
         const totalStudents = courseStats.reduce((sum, c) => sum + (c.studentCount || 0), 0);

@@ -11,14 +11,15 @@ import {
   getQuizAttemptSummaryByCourse,
 } from "../controllers/quizController.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { validateGeminiApiKey } from "../middleware/geminiValidator.js";
 
 const router = express.Router();
 
 // Create quiz manually (Teacher only)
 router.post("/", protect, createQuiz);
 
-// Generate quiz from material (Teacher only)
-router.post("/generate", protect, generateQuiz);
+// Generate quiz from material (Teacher only) - with API key validation
+router.post("/generate", protect, validateGeminiApiKey, generateQuiz);
 
 // Get quizzes for a specific material
 router.get("/material/:materialId", protect, getQuizzesByMaterial);

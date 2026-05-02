@@ -87,7 +87,6 @@ export const uploadMaterial = async (req, res) => {
       fileUrl,
       fileType,
       status: "Processing",
-      aiStatus: "pending",
       materialType: "lecture",
       uploadedBy: userId,
     });
@@ -116,7 +115,7 @@ export const uploadMaterial = async (req, res) => {
  */
 async function processPDFAsync(material) {
   try {
-    // Step 1: Extract text from PDF
+    // Extract text from PDF
     console.log(`[Processing] Extracting text from: ${material.filePath}`);
     const extractedText = await extractPDFText(material.filePath);
     
@@ -124,81 +123,18 @@ async function processPDFAsync(material) {
       throw new Error("No text content extracted from PDF");
     }
 
-    // Save extracted text
-    material.textContent = extractedText;
+    // Save extracted text to material
+    material.extractedText = extractedText;
     material.status = "Ready";
     await material.save();
 
-    // Step 2: Send to AI service (non-critical)
-    try {
-      console.log(`[AI] Ingesting material: ${material._id}`);
-      await ingestMaterialToAI(material._id, extractedText);
-      
-      material.aiStatus = "processed";
-      await material.save();
-      
-      console.log(`[AI] Material ${material._id} processed successfully`);
-      
-      // Step 3: Process for Study Buddy (RAG)
-      await processForStudyBuddy(material._id, material.filePath);
-      
-    } catch (aiError) {
-      // AI failure should not affect upload success
-      console.error(`[AI] Failed to ingest material ${material._id}:`, aiError.message);
-      
-      material.aiStatus = "pending";
-      await material.save();
-    }
+    console.log(`[Gemini] Material ${material._id} ready for AI features. Text length: ${extractedText.length} characters`);
 
   } catch (error) {
     console.error(`[Processing] Failed for material ${material._id}:`, error.message);
     
-    material.status = "Pending";
-    material.aiStatus = "failed";
+    material.status = "Failed";
     await material.save();
-  }
-}
-
-/**
- * Process material for Study Buddy (RAG system)
- * Directly calls Python AI service to process lecture content
- * @param {String} materialId - Material ID
- * @param {String} filePath - File path
- */
-async function processForStudyBuddy(materialId, filePath) {
-  try {
-    console.log(`[Study Buddy] Processing material ${materialId} for RAG`);
-    
-    // Step 1: Extract text
-    const { extractText, chunkText } = await import('../utils/textExtractor.js');
-    const extractedText = await extractText(filePath);
-    
-    if (!extractedText || extractedText.trim().length === 0) {
-      console.error(`[Study Buddy] No text extracted from ${filePath}`);
-      return;
-    }
-    
-    console.log(`[Study Buddy] Extracted ${extractedText.length} characters`);
-    
-    // Step 2: Create chunks
-    const chunks = chunkText(extractedText, 600, 100);
-    console.log(`[Study Buddy] Created ${chunks.length} chunks`);
-    
-    // Step 3: Send directly to Python AI service
-    await axios.post(`${AI_STUDY_BUDDY_URL}/embed`, {
-      lectureId: materialId.toString(),
-      chunks: chunks
-    }, {
-      timeout: 120000, // 2 minutes
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    console.log(`[Study Buddy] Material ${materialId} ready for chat`);
-  } catch (error) {
-    console.error(`[Study Buddy] Processing failed for ${materialId}:`, error.message);
-    // Don't fail the main upload - Study Buddy is optional
   }
 }
 
@@ -295,7 +231,7 @@ export const getAllMaterials = async (req, res) => {
     // For teachers, return only their own course materials
     else if (req.user.role === "Teacher") {
       const courses = await Course.find({
-        teacher: userId,
+        teachers: userId,
       }).select("_id");
 
       const courseIds = courses.map((c) => c._id);
@@ -304,12 +240,112 @@ export const getAllMaterials = async (req, res) => {
     // For admins, return all materials (no query filter)
 
     const materials = await CourseMaterial.find(query)
-      .populate("course", "courseCode title teacher")
+      .populate("course", "courseCode title teachers")
       .sort({ createdAt: -1 })
       .lean();
 
     return res.status(200).json({ materials });
   } catch (error) {
     return res.status(400).json({ message: error.message || "Failed to load materials." });
+  }
+};
+
+export const getMaterialById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user._id;
+
+    const material = await CourseMaterial.findById(id)
+      .populate("course", "courseCode title teachers")
+      .lean();
+
+    if (!material) {
+      return res.status(404).json({ message: "Material not found." });
+    }
+
+    // Authorization check
+    if (req.user.role === "Student") {
+      // Students must be enrolled to access materials
+      const isEnrolled = await StudentEnrollment.findOne({
+        student: userId,
+        course: material.course._id,
+      });
+
+      if (!isEnrolled) {
+        return res.status(403).json({
+          message: "You must be enrolled in this course to access this material.",
+        });
+      }
+    } else if (req.user.role === "Teacher") {
+      // Teachers can only access materials from their own courses
+      const course = material.course;
+      if (!course.teachers.some((id) => id.toString() === userId.toString())) {
+        return res.status(403).json({
+          message: "You can only access materials from your own courses.",
+        });
+      }
+    }
+
+    return res.status(200).json({ material });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to load material." });
+  }
+};
+export const updateMaterial = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user._id;
+    const { title } = req.body;
+
+    const material = await CourseMaterial.findById(id);
+    if (!material) {
+      return res.status(404).json({ message: "Material not found." });
+    }
+
+    // Check if user owns the material
+    if (material.userId.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "You do not have permission to update this material." });
+    }
+
+    // If file is being replaced
+    if (req.file) {
+      // Delete old file from disk
+      if (fs.existsSync(material.filePath)) {
+        fs.unlinkSync(material.filePath);
+      }
+
+      const fileType = req.file.mimetype.includes("pdf") ? "PDF" : "PPT";
+      const fileUrl = `/uploads/${req.file.filename}`;
+
+      // Update material with new file
+      material.fileName = req.file.originalname;
+      material.filePath = req.file.path;
+      material.fileUrl = fileUrl;
+      material.fileType = fileType;
+      material.status = "Processing";
+      material.extractedText = "";
+
+      // Process PDF in background if new file is PDF
+      if (fileType === "PDF") {
+        processPDFAsync(material);
+      } else {
+        // For PPT, mark as ready without AI processing
+        material.status = "Ready";
+        await material.save();
+      }
+    } else {
+      // Just update title
+      if (title) {
+        material.title = title;
+        await material.save();
+      }
+    }
+
+    return res.status(200).json({
+      message: "Material updated successfully.",
+      material,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to update material." });
   }
 };

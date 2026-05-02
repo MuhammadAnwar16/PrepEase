@@ -8,29 +8,11 @@
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import Course from "./models/Course.js";
+import { flattenSpring2026Catalog } from "./config/spring2026Catalog.js";
 
 dotenv.config();
 
-const sampleCourses = [
-  {
-    courseCode: "CS101",
-    title: "Data Structures",
-    description: "Learn fundamental data structures including arrays, linked lists, stacks, queues, and trees.",
-    teacher: null, // Will be set to a test teacher ID if available
-  },
-  {
-    courseCode: "WEB201",
-    title: "Web Development",
-    description: "Master full-stack web development with HTML, CSS, JavaScript, React, Node.js, and databases.",
-    teacher: null,
-  },
-  {
-    courseCode: "ML301",
-    title: "Machine Learning",
-    description: "Explore machine learning algorithms, neural networks, and practical applications with Python.",
-    teacher: null,
-  },
-];
+const sampleCourses = flattenSpring2026Catalog();
 
 const seedDatabase = async () => {
   try {
@@ -41,13 +23,24 @@ const seedDatabase = async () => {
     await mongoose.connect(mongoUri);
     console.log("[Seed] ✅ Connected to MongoDB\n");
 
-    // Clear existing courses (optional - comment out to keep existing courses)
-    // const deletedCount = await Course.deleteMany({});
-    // console.log(`[Seed] Cleared ${deletedCount.deletedCount} existing courses\n`);
+    await Course.collection.dropIndex("courseCode_1").catch(() => {});
+    await Course.syncIndexes().catch(() => {});
 
-    // Insert sample courses
-    console.log("[Seed] Inserting sample courses...\n");
-    const createdCourses = await Course.insertMany(sampleCourses);
+    console.log("[Seed] Upserting Spring-2026 catalog...\n");
+    const createdCourses = [];
+
+    for (const courseData of sampleCourses) {
+      const course = await Course.findOneAndUpdate(
+        {
+          department: courseData.department,
+          programSemester: courseData.programSemester,
+          courseCode: courseData.courseCode,
+        },
+        { $set: courseData },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+      );
+      createdCourses.push(course);
+    }
 
     // Log created courses with their IDs
     console.log("[Seed] ✅ Courses created successfully:\n");
@@ -64,7 +57,7 @@ const seedDatabase = async () => {
     console.log("\n[Seed] 📋 Course IDs for testing:\n");
     
     createdCourses.forEach((course) => {
-      console.log(`${course.courseCode}: ${course._id}`);
+      console.log(`${course.department} | ${course.courseCode}: ${course._id}`);
     });
 
     console.log("\n[Seed] ✨ Seeding complete!\n");

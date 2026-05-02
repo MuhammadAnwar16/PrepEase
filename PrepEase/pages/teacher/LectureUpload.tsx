@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Loader, BookOpen, FileText, Trash2 } from 'lucide-react';
+import { Upload, Loader, BookOpen, FileText, Trash2, Edit2 } from 'lucide-react';
 import axiosInstance from '../../src/api/axiosInstance';
 
 const TeacherLectureUpload: React.FC = () => {
@@ -12,6 +12,9 @@ const TeacherLectureUpload: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [lectures, setLectures] = useState<any[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editFile, setEditFile] = useState<File | null>(null);
 
   useEffect(() => {
     fetchAssignedCourses();
@@ -40,8 +43,8 @@ const TeacherLectureUpload: React.FC = () => {
 
   const fetchCourseLectures = async (courseId: string) => {
     try {
-      // Lectures/materials management not fully implemented on backend
-      setLectures([]);
+      const response = await axiosInstance.get(`/materials/${courseId}`);
+      setLectures(response.data.materials || []);
     } catch (err: any) {
       console.error('Failed to fetch lectures:', err);
       setLectures([]);
@@ -56,6 +59,18 @@ const TeacherLectureUpload: React.FC = () => {
         return;
       }
       setSelectedFile(file);
+      setError('');
+    }
+  };
+
+  const handleEditFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!['application/pdf', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'].includes(file.type)) {
+        setError('Only PDF and PPT files are allowed');
+        return;
+      }
+      setEditFile(file);
       setError('');
     }
   };
@@ -121,7 +136,43 @@ const TeacherLectureUpload: React.FC = () => {
     }
   };
 
+  const handleReplaceLecture = async (lectureId: string) => {
+    if (!editFile && !editTitle) {
+      setError('Please select a file or enter a title');
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setUploadingFile(true);
+
+    try {
+      const formData = new FormData();
+      if (editTitle) formData.append('title', editTitle);
+      if (editFile) formData.append('file', editFile);
+
+      await axiosInstance.put(`/materials/${lectureId}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      setSuccess('Lecture updated successfully!');
+      setEditingId(null);
+      setEditTitle('');
+      setEditFile(null);
+      if (selectedCourse) {
+        fetchCourseLectures(selectedCourse);
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Failed to update lecture');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
   const selectedCourseData = courses.find((c) => c._id === selectedCourse);
+  const editingLecture = editingId ? lectures.find(l => l._id === editingId) : null;
 
   return (
     <div className="space-y-8 bg-[#FDFBF7] -m-8 p-8 min-h-screen">
@@ -237,44 +288,107 @@ const TeacherLectureUpload: React.FC = () => {
               {lectures.length > 0 ? (
                 <div className="space-y-3">
                   {lectures.map((lecture) => (
-                    <div
-                      key={lecture._id}
-                      className="flex items-start justify-between p-4 border border-stone-200 rounded-sm hover:bg-stone-50 transition-colors"
-                    >
-                      <div className="flex items-start gap-3 flex-1">
-                        <div className="p-2 bg-stone-50 border border-stone-200 text-stone-900 rounded-sm mt-1">
-                          <FileText size={20} strokeWidth={1.5} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-sans font-bold text-stone-900 break-words">{lecture.title}</h3>
-                          <p className="text-xs font-sans text-stone-500 mt-1">
-                            {lecture.fileName} • {lecture.fileType}
-                          </p>
-                          <p className="text-xs font-sans text-stone-400 mt-1">
-                            {new Date(lecture.createdAt).toLocaleDateString()}
-                          </p>
-                          <div className="mt-2">
-                            <span
-                              className={`inline-block text-xs border px-2 py-1 font-mono font-bold uppercase ${
-                                lecture.status === 'Ready'
-                                  ? 'border-emerald-700 text-emerald-700'
-                                  : lecture.status === 'Processing'
-                                  ? 'border-stone-900 text-stone-900'
-                                  : 'border-rose-700 text-rose-700'
-                              }`}
+                    <div key={lecture._id}>
+                      {editingId === lecture._id ? (
+                        <div className="p-4 border border-stone-300 rounded-sm bg-stone-50 space-y-3">
+                          <div>
+                            <label className="block font-mono text-[10px] uppercase tracking-widest font-bold text-stone-400 mb-2">Title</label>
+                            <input
+                              type="text"
+                              value={editTitle || lecture.title}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              className="w-full px-4 py-3 bg-white border border-stone-200 font-sans text-sm text-stone-900 focus:border-stone-900 focus:ring-0 focus:outline-none rounded-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-mono text-[10px] uppercase tracking-widest font-bold text-stone-400 mb-2">Replace File (Optional)</label>
+                            <div className="border-2 border-dashed border-stone-200 rounded-sm p-4 text-center hover:border-stone-900 transition-colors bg-white">
+                              <input
+                                type="file"
+                                accept=".pdf,.ppt,.pptx"
+                                onChange={handleEditFileSelect}
+                                className="hidden"
+                                id={`edit-file-input-${lecture._id}`}
+                              />
+                              <label htmlFor={`edit-file-input-${lecture._id}`} className="cursor-pointer">
+                                <Upload className="mx-auto text-stone-400 mb-2" size={24} strokeWidth={1.5} />
+                                <p className="text-xs font-sans font-bold text-stone-700">
+                                  {editFile ? editFile.name : 'Click to upload new file'}
+                                </p>
+                              </label>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleReplaceLecture(lecture._id)}
+                              disabled={uploadingFile}
+                              className="flex-1 bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 rounded-sm px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors shadow-sm font-bold"
                             >
-                              {lecture.status}
-                            </span>
+                              {uploadingFile ? <Loader className="animate-spin inline mr-1" size={12} /> : null} Save
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingId(null);
+                                setEditTitle('');
+                                setEditFile(null);
+                              }}
+                              className="flex-1 bg-stone-300 text-stone-900 hover:bg-stone-400 rounded-sm px-4 py-2 text-xs font-mono uppercase tracking-widest transition-colors shadow-sm font-bold"
+                            >
+                              Cancel
+                            </button>
                           </div>
                         </div>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteLecture(lecture._id)}
-                        className="p-2 text-stone-400 hover:text-rose-700 rounded-sm transition flex-shrink-0 ml-2"
-                        title="Delete lecture"
-                      >
-                        <Trash2 size={18} strokeWidth={1.5} />
-                      </button>
+                      ) : (
+                        <div className="flex items-start justify-between p-4 border border-stone-200 rounded-sm hover:bg-stone-50 transition-colors">
+                          <div className="flex items-start gap-3 flex-1">
+                            <div className="p-2 bg-stone-50 border border-stone-200 text-stone-900 rounded-sm mt-1">
+                              <FileText size={20} strokeWidth={1.5} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-sans font-bold text-stone-900 break-words">{lecture.title}</h3>
+                              <p className="text-xs font-sans text-stone-500 mt-1">
+                                {lecture.fileName} • {lecture.fileType}
+                              </p>
+                              <p className="text-xs font-sans text-stone-400 mt-1">
+                                {new Date(lecture.createdAt).toLocaleDateString()}
+                              </p>
+                              <div className="mt-2">
+                                <span
+                                  className={`inline-block text-xs border px-2 py-1 font-mono font-bold uppercase ${
+                                    lecture.status === 'Ready'
+                                      ? 'border-emerald-700 text-emerald-700'
+                                      : lecture.status === 'Processing'
+                                      ? 'border-stone-900 text-stone-900'
+                                      : 'border-rose-700 text-rose-700'
+                                  }`}
+                                >
+                                  {lecture.status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 ml-2 flex-shrink-0">
+                            <button
+                              onClick={() => {
+                                setEditingId(lecture._id);
+                                setEditTitle(lecture.title);
+                                setEditFile(null);
+                              }}
+                              className="p-2 text-stone-400 hover:text-stone-900 rounded-sm transition"
+                              title="Edit lecture"
+                            >
+                              <Edit2 size={18} strokeWidth={1.5} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteLecture(lecture._id)}
+                              className="p-2 text-stone-400 hover:text-rose-700 rounded-sm transition"
+                              title="Delete lecture"
+                            >
+                              <Trash2 size={18} strokeWidth={1.5} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

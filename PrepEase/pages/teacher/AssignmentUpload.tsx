@@ -33,6 +33,28 @@ const TeacherAssignmentUpload: React.FC = () => {
     }
   }, [selectedCourse]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const detail = (e as CustomEvent).detail || {};
+        const courseId = detail.courseId || detail.course || null;
+        if (courseId) {
+          // if current selected course matches, refresh; otherwise optionally switch
+          if (selectedCourse === courseId) {
+            fetchCourseAssignments(selectedCourse);
+          } else if (!selectedCourse) {
+            setSelectedCourse(courseId);
+          }
+        }
+      } catch (err) {
+        // noop
+      }
+    };
+
+    window.addEventListener('assessmentCreated', handler as EventListener);
+    return () => window.removeEventListener('assessmentCreated', handler as EventListener);
+  }, [selectedCourse]);
+
   const fetchAssignedCourses = async () => {
     setLoading(true);
     try {

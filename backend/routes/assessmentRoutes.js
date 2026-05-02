@@ -13,6 +13,7 @@ import {
   getCourseSubmissions,
 } from "../controllers/assessmentController.js";
 import { protect, isTeacher } from "../middleware/authMiddleware.js";
+import { validateGeminiApiKey } from "../middleware/geminiValidator.js";
 
 const router = express.Router();
 
@@ -28,8 +29,8 @@ router.get("/submissions/course/:courseId", protect, isTeacher, getCourseSubmiss
 router.get("/submission/:submissionId", protect, getSubmission);
 router.put("/submission/:submissionId/grade", protect, isTeacher, gradeSubmission);
 
-// Assignment CRUD endpoints (teacher only)
-router.post("/", protect, isTeacher, createAssignment);
+// Assignment CRUD endpoints (teacher only) - with API key validation for AI generation
+router.post("/", protect, isTeacher, validateGeminiApiKey, createAssignment);
 router.get("/course/:courseId", protect, isTeacher, getCourseAssignments);
 
 // Single assignment endpoints

@@ -6,12 +6,20 @@ const courseSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      unique: true,
     },
     title: {
       type: String,
       required: true,
       trim: true,
+    },
+    department: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    programSemester: {
+      type: Number,
+      default: null,
     },
     description: {
       type: String,
@@ -44,6 +52,8 @@ const courseSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+courseSchema.index({ department: 1, programSemester: 1, courseCode: 1 }, { unique: true });
 
 const Course = mongoose.model("Course", courseSchema);
 

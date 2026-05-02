@@ -1,9 +1,7 @@
-import axios from "axios";
 import CourseMaterial from "../models/CourseMaterial.js";
 import Course from "../models/Course.js";
 import StudentEnrollment from "../models/StudentEnrollment.js";
-
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
+import { studyBuddyChat } from "../services/geminiService.js";
 
 /**
  * AI Study Buddy Chat Endpoint
@@ -38,11 +36,19 @@ export const askQuestion = async (req, res) => {
       });
     }
 
-    // Verify material has been processed
-    if (material.aiStatus !== "processed") {
+    // Check if material is ready for AI processing
+    if (material.status !== "Ready") {
       return res.status(400).json({ 
         message: "Material is not yet processed by AI service. Please try again later.",
-        aiStatus: material.aiStatus
+        status: material.status
+      });
+    }
+
+    // Check if material has extracted text
+    if (!material.extractedText || material.extractedText.trim().length === 0) {
+      return res.status(400).json({ 
+        message: "Material text is not available. Please re-upload the material.",
+        status: material.status
       });
     }
 
@@ -69,24 +75,13 @@ export const askQuestion = async (req, res) => {
       }
     }
 
-    // Forward to AI service
+    // Use Gemini AI to answer the question
     try {
       console.log(`[Chat] User ${userId} asking about material ${materialId}`);
       
-      const aiResponse = await axios.post(
-        `${AI_SERVICE_URL}/chat`,
-        {
-          materialId: materialId.toString(),
-          question: question.trim(),
-        },
-        {
-          timeout: 30000, // 30 second timeout
-        }
-      );
+      const answer = await studyBuddyChat(material.extractedText, question.trim());
 
-      const answer = aiResponse.data.answer;
-
-      console.log(`[Chat] AI response received for material ${materialId}`);
+      console.log(`[Chat] Gemini AI response received for material ${materialId}`);
 
       return res.status(200).json({
         success: true,
@@ -96,23 +91,11 @@ export const askQuestion = async (req, res) => {
       });
 
     } catch (aiError) {
-      console.error("[Chat] AI service error:", aiError.message);
+      console.error("[Chat] Gemini AI error:", aiError.message);
 
-      if (aiError.code === "ECONNREFUSED") {
-        return res.status(503).json({ 
-          message: "AI service is currently unavailable. Please try again later." 
-        });
-      }
-
-      if (aiError.response?.status === 404) {
-        return res.status(404).json({ 
-          message: "Material not found in AI service. Please re-upload the material." 
-        });
-      }
-
-      return res.status(502).json({ 
+      return res.status(500).json({ 
         message: "Failed to get response from AI service.",
-        error: aiError.response?.data?.detail || aiError.message
+        error: aiError.message
       });
     }
 

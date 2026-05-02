@@ -1,9 +1,5 @@
 import axios from "axios";
 import fs from "fs/promises";
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
-const pdf = require("pdf-parse");
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 
@@ -14,12 +10,17 @@ const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
  */
 export const extractPDFText = async (filePath) => {
   try {
+    // Dynamic import to avoid pdf-parse initialization bug and skip its test harness
+    // Import the internal module directly to prevent index.js from executing test code
+    const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
     const dataBuffer = await fs.readFile(filePath);
-    const data = await pdf(dataBuffer);
+    const data = await pdfParse(dataBuffer);
     return data.text;
   } catch (error) {
-    console.error("[PDF] Extraction failed:", error.message);
-    throw new Error("Failed to extract text from PDF");
+    console.error("[PDF] Extraction failed for:", filePath);
+    console.error(error.stack || error);
+    // Propagate original error message to caller for better diagnostics
+    throw new Error(error.message || "Failed to extract text from PDF");
   }
 };
 

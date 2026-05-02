@@ -417,13 +417,65 @@ export const getStudentCourseDetails = async (req, res) => {
       };
     });
 
-    return res.status(200).json({
-      message: "Student course details retrieved successfully.",
-      student: enrollment.student,
-      enrollment,
-      assignments,
-      quizzes: quizDetails,
-    });
+    // Analyze weak topics from student's quiz attempts
+    const weakTopics = {};
+    const topicStats = {};
+
+    if (quizIds.length > 0) {
+      const allQuizzesWithQuestions = await Quiz.find({ _id: { $in: quizIds }, isActive: true })
+        .select("_id questions")
+        .lean();
+
+      const quizQuestionsMap = allQuizzesWithQuestions.reduce((acc, quiz) => {
+        acc[quiz._id.toString()] = quiz.questions || [];
+        return acc;
+      }, {});
+
+      const detailedAttempts = await QuizAttempt.find({
+        quizId: { $in: quizIds },
+        studentId,
+      })
+        .select("quizId answers score status")
+        .lean();
+
+      detailedAttempts.forEach((attempt) => {
+        const quizId = attempt.quizId.toString();
+        const questions = quizQuestionsMap[quizId] || [];
+
+        (attempt.answers || []).forEach((answer) => {
+          const question = questions[answer.questionIndex];
+          if (question) {
+            const topic = question.topic || "General";
+
+            if (!topicStats[topic]) {
+              topicStats[topic] = {
+                total: 0,
+                correct: 0,
+                percentage: 0,
+                questions: []
+              };
+            }
+
+            topicStats[topic].total += 1;
+            if (answer.isCorrect) {
+              topicStats[topic].correct += 1;
+            } else {
+              topicStats[topic].questions.push(question.question);
+            }
+          }
+        });
+      });
+
+      Object.keys(topicStats).forEach((topic) => {
+        const stats = topicStats[topic];
+        stats.percentage = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+        if (stats.percentage < 70) {
+          weakTopics[topic] = stats;
+        }
+      });
+    }
+
+
   } catch (error) {
     console.error("[Enrollment] getStudentCourseDetails error:", error.message || error);
     return res.status(500).json({ message: "Failed to retrieve student course details." });
@@ -582,6 +634,62 @@ export const getMyCourseDetails = async (req, res) => {
       ? Math.round((assignmentCompletion + averageQuizScore) / 2)
       : averageQuizScore;
 
+    // Analyze weak topics from quiz attempts
+    const weakTopics = {};
+    const topicStats = {};
+
+    if (quizIds.length > 0) {
+      const allQuizzesWithQuestions = await Quiz.find({ _id: { $in: quizIds }, isActive: true })
+        .select("_id questions")
+        .lean();
+
+      const quizQuestionsMap = allQuizzesWithQuestions.reduce((acc, quiz) => {
+        acc[quiz._id.toString()] = quiz.questions || [];
+        return acc;
+      }, {});
+
+      const detailedAttempts = await QuizAttempt.find({
+        quizId: { $in: quizIds },
+        studentId,
+      })
+        .select("quizId answers score status")
+        .lean();
+
+      detailedAttempts.forEach((attempt) => {
+        const quizId = attempt.quizId.toString();
+        const questions = quizQuestionsMap[quizId] || [];
+
+        (attempt.answers || []).forEach((answer) => {
+          const question = questions[answer.questionIndex];
+          if (question) {
+            const topic = question.topic || "General";
+
+            if (!topicStats[topic]) {
+              topicStats[topic] = {
+                total: 0,
+                correct: 0,
+                percentage: 0,
+              };
+            }
+
+            topicStats[topic].total += 1;
+            if (answer.isCorrect) {
+              topicStats[topic].correct += 1;
+            }
+          }
+        });
+      });
+
+      // Calculate percentages and identify weak topics
+      Object.keys(topicStats).forEach((topic) => {
+        const stats = topicStats[topic];
+        stats.percentage = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+        if (stats.percentage < 70) {
+          weakTopics[topic] = stats;
+        }
+      });
+    }
+
     return res.status(200).json({
       message: "Course performance retrieved successfully.",
       course: enrollment.course,
@@ -592,6 +700,12 @@ export const getMyCourseDetails = async (req, res) => {
         quizAttempts: quizAttemptsCount,
         averageQuizScore,
         performanceScore,
+        weakTopics: Object.keys(weakTopics).map((topic) => ({
+          topic,
+          percentage: weakTopics[topic].percentage,
+          totalQuestions: weakTopics[topic].total,
+          correctAnswers: weakTopics[topic].correct,
+        })),
       },
       assignments,
       quizzes: quizDetails,

@@ -16,6 +16,10 @@ const materialSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    extractedText: {
+      type: String,
+      default: '',
+    },
   },
   { timestamps: true }
 );

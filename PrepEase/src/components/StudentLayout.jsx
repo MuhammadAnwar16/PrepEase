@@ -6,7 +6,10 @@ import {
   BarChart2, 
   Settings, 
   LogOut,
-  BookOpen
+  BookOpen,
+  MessageCircle,
+  Copy,
+  Search
 } from 'lucide-react';
 
 const StudentLayout = () => {
@@ -42,12 +45,22 @@ const StudentLayout = () => {
           <Link to="/student/dashboard" className={navItemClass('/student/dashboard')}>
             <LayoutDashboard size={18} strokeWidth={1.5} /> Dashboard
           </Link>
+          <div className="font-mono text-[10px] uppercase tracking-widest px-4 mt-6 mb-2 text-stone-400 font-bold">AI Tools</div>
+          <Link to="/chat" className={navItemClass('/chat')}>
+            <MessageCircle size={18} strokeWidth={1.5} /> Study Buddy
+          </Link>
+          <Link to="/flashcards" className={navItemClass('/flashcards')}>
+            <Copy size={18} strokeWidth={1.5} /> Flashcards
+          </Link>
+          <Link to="/resources-discover" className={navItemClass('/resources-discover')}>
+            <Search size={18} strokeWidth={1.5} /> Resources
+          </Link>
           <div className="font-mono text-[10px] uppercase tracking-widest px-4 mt-6 mb-2 text-stone-400 font-bold">Academics</div>
           <Link to="/student/assignments" className={navItemClass('/student/assignments')}>
             <FileText size={18} strokeWidth={1.5} /> Assignments
           </Link>
           <Link to="/student/resources" className={navItemClass('/student/resources')}>
-            <Lightbulb size={18} strokeWidth={1.5} /> Resource Discovery
+            <Lightbulb size={18} strokeWidth={1.5} /> Materials
           </Link>
           <Link to="/student/analytics" className={navItemClass('/student/analytics')}>
             <BarChart2 size={18} strokeWidth={1.5} /> Performance

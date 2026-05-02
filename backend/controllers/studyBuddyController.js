@@ -1,220 +1,201 @@
-import axios from 'axios';
-import { extractText, chunkText } from '../utils/textExtractor.js';
-
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-
-/**
- * Process uploaded lecture file
- * Called after teacher uploads a file
- */
-async function processLectureUpload(req, res) {
-  try {
-    const { lectureId, filePath } = req.body;
-    
-    if (!lectureId || !filePath) {
-      return res.status(400).json({ 
-        message: 'lectureId and filePath are required' 
-      });
-    }
-    
-    console.log(`[Study Buddy] Processing lecture ${lectureId}`);
-    
-    // Step 1: Extract text from file
-    let extractedText;
-    try {
-      extractedText = await extractText(filePath);
-    } catch (error) {
-      console.error('[Study Buddy] Extraction error:', error.message);
-      return res.status(400).json({ 
-        message: `Text extraction failed: ${error.message}` 
-      });
-    }
-    
-    if (!extractedText || extractedText.trim().length === 0) {
-      return res.status(400).json({ 
-        message: 'No text content found in the uploaded file' 
-      });
-    }
-    
-    console.log(`[Study Buddy] Extracted ${extractedText.length} characters`);
-    
-    // Step 2: Split into chunks
-    const chunks = chunkText(extractedText, 600, 100);
-    
-    if (chunks.length === 0) {
-      return res.status(400).json({ 
-        message: 'Failed to create text chunks' 
-      });
-    }
-    
-    console.log(`[Study Buddy] Created ${chunks.length} chunks`);
-    
-    // Step 3: Send to AI service for embedding
-    try {
-      const aiResponse = await axios.post(
-        `${AI_SERVICE_URL}/embed`,
-        {
-          lectureId,
-          chunks
-        },
-        {
-          timeout: 120000, // 2 minutes for large files
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      console.log(`[Study Buddy] Lecture ${lectureId} embedded successfully`);
-      
-      return res.status(200).json({
-        success: true,
-        message: 'Lecture processed and ready for Study Buddy',
-        data: {
-          lectureId,
-          chunks_created: chunks.length,
-          embedding_response: aiResponse.data
-        }
-      });
-      
-    } catch (aiError) {
-      console.error('[Study Buddy] AI service error:', aiError.message);
-      
-      if (aiError.code === 'ECONNREFUSED') {
-        return res.status(503).json({ 
-          message: 'AI service is unavailable. Please start the AI service first.' 
-        });
-      }
-      
-      return res.status(500).json({ 
-        message: 'Failed to process lecture with AI service',
-        error: aiError.response?.data?.detail || aiError.message
-      });
-    }
-    
-  } catch (error) {
-    console.error('[Study Buddy] Processing error:', error);
-    return res.status(500).json({ 
-      message: 'Internal server error during lecture processing',
-      error: error.message
-    });
-  }
-}
+import CourseMaterial from '../models/CourseMaterial.js';
+import {
+  studyBuddyChat,
+  generateQuiz,
+  generateAssignment,
+  generateFlashcards,
+  suggestResources
+} from '../services/geminiService.js';
 
 /**
- * Study Buddy chat endpoint
- * Student asks a question about a specific lecture
+ * Chat with Study Buddy AI
+ * POST /api/study-buddy/chat
  */
-async function studyBuddyChat(req, res) {
+async function chat(req, res) {
   try {
-    const { question, lectureId } = req.body;
-    const userId = req.user?._id; // From auth middleware
-    
-    // Validation
-    if (!question || !lectureId) {
+    const { materialId, question } = req.body;
+
+    if (!materialId || !question) {
+      return res.status(400).json({ message: 'materialId and question are required' });
+    }
+
+    // Get material with extracted text
+    const material = await CourseMaterial.findById(materialId);
+    if (!material) {
+      return res.status(404).json({ message: 'Material not found' });
+    }
+
+    if (!material.extractedText) {
       return res.status(400).json({ 
-        message: 'question and lectureId are required' 
+        message: 'Material has no extracted text. Please upload a valid PDF/DOC file.' 
       });
     }
-    
-    if (typeof question !== 'string' || question.trim().length === 0) {
-      return res.status(400).json({ 
-        message: 'Question must be a non-empty string' 
-      });
-    }
-    
-    if (question.length > 500) {
-      return res.status(400).json({ 
-        message: 'Question is too long (max 500 characters)' 
-      });
-    }
-    
-    console.log(`[Study Buddy] User ${userId} asking about lecture ${lectureId}`);
-    
-    // Call Python AI service
-    try {
-      const aiResponse = await axios.post(
-        `${AI_SERVICE_URL}/study-buddy`,
-        {
-          question: question.trim(),
-          lectureId
-        },
-        {
-          timeout: 30000, // 30 seconds
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      const { answer, confidence, sources_used } = aiResponse.data;
-      
-      console.log(`[Study Buddy] Answer generated with ${confidence} confidence`);
-      
-      return res.status(200).json({
-        success: true,
-        answer,
-        metadata: {
-          confidence,
-          sources_used,
-          lectureId
-        }
-      });
-      
-    } catch (aiError) {
-      console.error('[Study Buddy] AI error:', aiError.message);
-      
-      // Handle specific AI service errors
-      if (aiError.code === 'ECONNREFUSED') {
-        return res.status(503).json({ 
-          message: 'AI Study Buddy service is temporarily unavailable. Please try again later.' 
-        });
-      }
-      
-      if (aiError.response?.status === 404) {
-        return res.status(404).json({ 
-          message: 'This lecture has not been processed yet. Please contact your teacher.' 
-        });
-      }
-      
-      return res.status(500).json({ 
-        message: 'Failed to get answer from Study Buddy',
-        error: aiError.response?.data?.detail || 'Unknown error'
-      });
-    }
-    
+
+    console.log(`[Study Buddy] Chat request for material ${materialId}`);
+
+    // Get AI response from Gemini
+    const answer = await studyBuddyChat(material.extractedText, question);
+
+    res.json({ answer });
   } catch (error) {
     console.error('[Study Buddy] Chat error:', error);
-    return res.status(500).json({ 
-      message: 'Internal server error',
-      error: error.message
+    res.status(500).json({ 
+      message: 'Failed to get AI response', 
+      error: error.message 
     });
   }
 }
 
 /**
- * Check AI service health
+ * Generate quiz from material
+ * POST /api/study-buddy/generate-quiz
  */
-async function checkAIServiceHealth(req, res) {
+async function createQuiz(req, res) {
   try {
-    const response = await axios.get(`${AI_SERVICE_URL}/health`, {
-      timeout: 5000
-    });
-    
-    return res.status(200).json({
-      ai_service: 'online',
-      details: response.data
+    const { materialId, difficulty = 'medium', questionCount = 5 } = req.body;
+
+    if (!materialId) {
+      return res.status(400).json({ message: 'materialId is required' });
+    }
+
+    const material = await CourseMaterial.findById(materialId);
+    if (!material) {
+      return res.status(404).json({ message: 'Material not found' });
+    }
+
+    if (!material.extractedText) {
+      return res.status(400).json({ message: 'Material has no extracted text' });
+    }
+
+    console.log(`[Study Buddy] Generating quiz for material ${materialId}`);
+
+    const quiz = await generateQuiz(material.extractedText, difficulty, questionCount);
+
+    res.json({
+      materialId,
+      materialTitle: material.title,
+      difficulty,
+      ...quiz
     });
   } catch (error) {
-    return res.status(503).json({
-      ai_service: 'offline',
-      error: error.message
+    console.error('[Study Buddy] Quiz generation error:', error);
+    res.status(500).json({ message: 'Failed to generate quiz', error: error.message });
+  }
+}
+
+/**
+ * Generate assignment from material
+ * POST /api/study-buddy/generate-assignment
+ */
+async function createAssignment(req, res) {
+  try {
+    const { materialId, assignmentType = 'essay', difficulty = 'medium' } = req.body;
+
+    if (!materialId) {
+      return res.status(400).json({ message: 'materialId is required' });
+    }
+
+    const material = await CourseMaterial.findById(materialId);
+    if (!material) {
+      return res.status(404).json({ message: 'Material not found' });
+    }
+
+    if (!material.extractedText) {
+      return res.status(400).json({ message: 'Material has no extracted text' });
+    }
+
+    console.log(`[Study Buddy] Generating assignment for material ${materialId}`);
+
+    const assignment = await generateAssignment(material.extractedText, assignmentType, difficulty);
+
+    res.json({
+      materialId,
+      materialTitle: material.title,
+      ...assignment
     });
+  } catch (error) {
+    console.error('[Study Buddy] Assignment generation error:', error);
+    res.status(500).json({ message: 'Failed to generate assignment', error: error.message });
+  }
+}
+
+/**
+ * Generate flashcards from material
+ * POST /api/study-buddy/generate-flashcards
+ */
+async function createFlashcards(req, res) {
+  try {
+    const { materialId, count = 10 } = req.body;
+
+    if (!materialId) {
+      return res.status(400).json({ message: 'materialId is required' });
+    }
+
+    const material = await CourseMaterial.findById(materialId);
+    if (!material) {
+      return res.status(404).json({ message: 'Material not found' });
+    }
+
+    if (!material.extractedText) {
+      return res.status(400).json({ message: 'Material has no extracted text' });
+    }
+
+    console.log(`[Study Buddy] Generating ${count} flashcards for material ${materialId}`);
+
+    const result = await generateFlashcards(material.extractedText, count);
+
+    res.json({
+      materialId,
+      materialTitle: material.title,
+      ...result
+    });
+  } catch (error) {
+    console.error('[Study Buddy] Flashcard generation error:', error);
+    res.status(500).json({ message: 'Failed to generate flashcards', error: error.message });
+  }
+}
+
+/**
+ * Suggest learning resources
+ * POST /api/study-buddy/suggest-resources
+ */
+async function getResourceSuggestions(req, res) {
+  try {
+    const { materialId, topic } = req.body;
+
+    if (!materialId || !topic) {
+      return res.status(400).json({ message: 'materialId and topic are required' });
+    }
+
+    const material = await CourseMaterial.findById(materialId);
+    if (!material) {
+      return res.status(404).json({ message: 'Material not found' });
+    }
+
+    if (!material.extractedText) {
+      return res.status(400).json({ message: 'Material has no extracted text' });
+    }
+
+    console.log(`[Study Buddy] Suggesting resources for topic: ${topic}`);
+
+    const result = await suggestResources(material.extractedText, topic);
+
+    res.json({
+      materialId,
+      materialTitle: material.title,
+      topic,
+      ...result
+    });
+  } catch (error) {
+    console.error('[Study Buddy] Resource suggestion error:', error);
+    res.status(500).json({ message: 'Failed to suggest resources', error: error.message });
   }
 }
 
 export {
-  processLectureUpload,
-  studyBuddyChat,
-  checkAIServiceHealth
+  chat,
+  createQuiz,
+  createAssignment,
+  createFlashcards,
+  getResourceSuggestions
 };

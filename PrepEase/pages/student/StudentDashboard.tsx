@@ -178,17 +178,48 @@ const StudentDashboard: React.FC = () => {
     <div className="space-y-8 bg-[#FDFBF7] -m-8 p-8 min-h-screen">
       {/* Welcome Header */}
       <div className="bg-white border border-stone-200 rounded-sm p-8 shadow-sm">
-        <h1 className="text-3xl font-serif font-bold text-stone-900 tracking-tight mb-2">Welcome, {userName}</h1>
-        <p className="font-sans text-sm text-stone-600">
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <Loader size={16} className="animate-spin" strokeWidth={1.5} />
-              Loading...
-            </span>
-          ) : (
-            `${pendingQuizzes} pending quiz${pendingQuizzes !== 1 ? 'zes' : ''} this week.`
-          )}
-        </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-stone-900 tracking-tight mb-2">Welcome, {userName}</h1>
+            <p className="font-sans text-sm text-stone-600">
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <Loader size={16} className="animate-spin" strokeWidth={1.5} />
+                  Loading...
+                </span>
+              ) : (
+                `${pendingQuizzes} pending quiz${pendingQuizzes !== 1 ? 'zes' : ''} this week.`
+              )}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Link
+              to="/chat"
+              className="inline-flex items-center justify-center rounded-sm border border-stone-900 px-4 py-2 text-[10px] font-mono font-bold uppercase tracking-widest text-stone-900 transition-colors hover:bg-stone-900 hover:text-white"
+            >
+              Open Study Buddy
+            </Link>
+            <Link
+              to="/flashcards"
+              className="inline-flex items-center justify-center rounded-sm border border-stone-900 px-4 py-2 text-[10px] font-mono font-bold uppercase tracking-widest text-stone-900 transition-colors hover:bg-stone-900 hover:text-white"
+            >
+              Generate Flashcards
+            </Link>
+            <Link
+              to="/resources-discover"
+              className="inline-flex items-center justify-center rounded-sm border border-stone-900 px-4 py-2 text-[10px] font-mono font-bold uppercase tracking-widest text-stone-900 transition-colors hover:bg-stone-900 hover:text-white"
+            >
+              Discover Resources
+            </Link>
+            <Link
+              to="/student/resources"
+              className="inline-flex items-center justify-center rounded-sm border border-stone-200 px-4 py-2 text-[10px] font-mono font-bold uppercase tracking-widest text-stone-600 transition-colors hover:border-stone-900 hover:text-stone-900"
+            >
+              View Materials
+            </Link>
+          </div>
+        </div>
       </div>
 
       {error && enrolledCourses.length > 0 && (
